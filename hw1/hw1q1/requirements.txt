@@ -1,0 +1,4 @@
+numpy==1.23
+gym==0.26
+matplotlib
+seaborn
