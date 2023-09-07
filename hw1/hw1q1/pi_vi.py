@@ -507,6 +507,5 @@ def main(args: Args):
         print(f"Value Iteration: {num_value_iter}")
         print('====================================')
 
-
 if __name__ == "__main__":
     main(tyro.cli(Args))
