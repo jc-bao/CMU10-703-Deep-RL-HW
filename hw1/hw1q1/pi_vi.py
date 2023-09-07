@@ -7,6 +7,8 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import gym
 import lake_envs as lake_env
+from dataclasses import dataclass
+import tyro
 
 
 def print_policy(policy, action_names):
@@ -78,8 +80,21 @@ def evaluate_policy_sync(env, value_func, gamma, policy, max_iterations=int(1e3)
       The value for the given policy and the number of iterations till
       the value function converged.
     """
+    num_iterations = 0
 
-    return value_func, 0
+    while num_iterations < max_iterations:
+        delta = 0
+        for s in range(env.observation_space.n):
+            v = value_func[s]
+            value_func[s] = sum(
+                prob * (rew + gamma * value_func[s_])
+                for prob, s_, rew, _ in env.P[s][policy[s]]
+            )
+            delta = max(delta, abs(v - value_func[s]))
+        num_iterations += 1
+        if delta < tol:
+            break
+    return value_func, num_iterations
 
 
 def evaluate_policy_async_ordered(env, value_func, gamma, policy, max_iterations=int(1e3), tol=1e-3):
@@ -167,7 +182,21 @@ def improve_policy(env, gamma, value_func, policy):
     bool, np.ndarray
       Returns true if policy changed. Also returns the new policy.
     """
-    return False, policy
+    policy_stable = True
+    for s in range(env.observation_space.n):
+        old_action = policy[s]
+        policy[s] = np.argmax(
+            [
+                sum(
+                    prob * (rew + gamma * value_func[s_])
+                    for prob, s_, rew, _ in env.P[s][a]
+                )
+                for a in range(env.action_space.n)
+            ]
+        )
+        if old_action != policy[s]: 
+            policy_stable = False
+    return not policy_stable, policy
 
 
 def policy_iteration_sync(env, gamma, max_iterations=int(1e3), tol=1e-3):
@@ -196,52 +225,24 @@ def policy_iteration_sync(env, gamma, max_iterations=int(1e3), tol=1e-3):
        Returns optimal policy, value function, number of policy
        improvement iterations, and number of value iterations.
     """
-    # parameters
-    action_dim = env.action_space.n
-    state_dim = env.observation_space.n
-    # value function
-    V = np.zeros(state_dim)
-    # policy
-    pi = np.random.choice(action_dim, size=(state_dim)) 
-
-    # start iteration
+    policy = np.random.choice(env.action_space.n, size=(env.observation_space.n)) 
+    value_func = np.zeros(env.observation_space.n)
     num_policy_iter = 0
     num_value_iter = 0
+
     while num_policy_iter < max_iterations:
         # Policy Evaluation
-        while True:
-            delta = 0
-            for s in range(state_dim):
-                v = V[s]
-                V[s] = np.sum(
-                    prob * (rew + gamma * V[s_])
-                    for prob, s_, rew, _ in env.P[s][pi[s]]
-                )
-                delta = np.max(delta, np.abs(v - V[s]))
-            num_value_iter += 1
-            if delta < tol:
-                break
+        value_func, iterations = evaluate_policy_sync(env, value_func, gamma, policy, max_iterations, tol)
+        num_value_iter += iterations
 
         # Policy Improvement
-        policy_stable = True
-        for s in range(state_dim):
-            old_action = pi[s]
-            pi[s] = np.argmax(
-                [
-                    sum(
-                        prob * (rew + gamma * V[s_])
-                        for prob, s_, rew, _ in env.P[s][a]
-                    )
-                    for a in range(env.action_space.n)
-                ]
-            )
-            if old_action != pi[s]: 
-                policy_stable = False
+        policy_changed, policy = improve_policy(env, gamma, value_func, policy)
         num_policy_iter += 1
-        if policy_stable:
-            return pi, V, num_policy_iter, num_value_iter
-    return pi, V, 0, 0
 
+        if not policy_changed:
+            break
+
+    return policy, value_func, num_policy_iter, num_value_iter
 
 def policy_iteration_async_ordered(env, gamma, max_iterations=int(1e3),
                                    tol=1e-3):
@@ -481,7 +482,31 @@ def value_func_heatmap(env, value_func):
     # More: https://matplotlib.org/3.1.1/gallery/color/colormap_reference.html
     return None
 
+@dataclass
+class Args:
+    mode: str = "sync"
+    gamma: float = 0.9
+    theta: float = 1e-3
+
+def main(args: Args):
+    # Define num_trials, gamma and whatever variables you need below.
+    envs = ['Deterministic-4x4-FrozenLake-v0', 'Deterministic-8x8-FrozenLake-v0']
+    # Setup test function
+    eval_fn = policy_iteration_sync if args.mode == "sync" else policy_iteration_async_ordered
+    # Run the experiment
+    for env_name in envs:
+        env = env_wrapper(env_name)
+        policy, value_func, num_policy_iter, num_value_iter = eval_fn(env, args.gamma, tol=args.theta)
+        print('====================================')
+        print(f"Policy for {env_name}")
+        print_policy(policy, lake_env.action_names)
+        print(f"Value function for {env_name}")
+        print(value_func)
+        print(f"Number of iterations for {env_name}")
+        print(f"Policy Iteration: {num_policy_iter}")
+        print(f"Value Iteration: {num_value_iter}")
+        print('====================================')
+
 
 if __name__ == "__main__":
-    envs = ['Deterministic-4x4-FrozenLake-v0', 'Deterministic-8x8-FrozenLake-v0']
-    # Define num_trials, gamma and whatever variables you need below.
+    main(tyro.cli(Args))
