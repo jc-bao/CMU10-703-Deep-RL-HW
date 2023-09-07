@@ -87,17 +87,18 @@ def evaluate_policy_sync(env, value_func, gamma, policy, max_iterations=int(1e3)
 
     while num_iterations < max_iterations:
         delta = 0
+        value_func_new = np.zeros(env.observation_space.n)
         for s in range(env.observation_space.n):
-            v = value_func[s]
-            value_func[s] = sum(
+            value_func_new[s] = sum(
                 prob * (rew + gamma * value_func[s_])
                 for prob, s_, rew, _ in env.P[s][policy[s]]
             )
-            delta = max(delta, abs(v - value_func[s]))
+            delta = max(delta, abs(value_func_new[s] - value_func[s]))
+        value_func = value_func_new
         num_iterations += 1
         if delta < tol:
             break
-    return value_func, num_iterations
+    return value_func_new, num_iterations
 
 
 def evaluate_policy_async_ordered(env, value_func, gamma, policy, max_iterations=int(1e3), tol=1e-3):
@@ -128,8 +129,20 @@ def evaluate_policy_async_ordered(env, value_func, gamma, policy, max_iterations
       The value for the given policy and the number of iterations till
       the value function converged.
     """
-
-    return value_func, 0
+    num_iter = 0
+    while num_iter<max_iterations:
+        delta = 0
+        for s in range(env.observation_space.n):
+            v = value_func[s]
+            value_func[s] = sum(
+                prob * (rew + gamma * value_func[s_])
+                for prob, s_, rew, _ in env.P[s][policy[s]]
+            )
+            delta = max(delta, abs(v - value_func[s]))
+        if delta < tol:
+            return value_func, num_iter
+        num_iter += 1
+    return value_func, num_iter
 
 
 def evaluate_policy_async_randperm(env, value_func, gamma, policy, max_iterations=int(1e3), tol=1e-3):
@@ -272,9 +285,35 @@ def policy_iteration_async_ordered(env, gamma, max_iterations=int(1e3),
        Returns optimal policy, value function, number of policy
        improvement iterations, and number of value iterations.
     """
-    policy = np.zeros(env.observation_space.n, dtype='int')
-    value_func = np.zeros(env.observation_space.n)
-    return policy, value_func, 0, 0
+    V = np.zeros(env.observation_space.n)
+    pi = np.random.choice(env.action_space.n, size=(env.observation_space.n))
+    num_policy_iter = 0
+    num_value_iter = 0
+
+    while num_policy_iter < max_iterations:
+        V, num_value_iter_current = evaluate_policy_async_ordered(env, V, gamma, pi, max_iterations, tol)
+        num_value_iter += num_value_iter_current
+
+        # Policy improvement
+        policy_stable = True
+        for s in range(env.observation_space.n):
+            old_action = pi[s]
+            pi[s] = np.argmax(
+                [
+                    sum(
+                        prob * (rew + gamma * V[s_])
+                        for prob, s_, rew, _ in env.P[s][a]
+                    )
+                    for a in range(env.action_space.n)
+                ]
+            )
+            if old_action != pi[s]: 
+                policy_stable = False
+        num_policy_iter += 1
+        if policy_stable:
+            return pi, V, num_policy_iter, num_value_iter
+
+    return pi, V, num_policy_iter, num_value_iter
 
 
 def policy_iteration_async_randperm(env, gamma, max_iterations=int(1e3),
@@ -326,21 +365,23 @@ def value_iteration_sync(env, gamma, max_iterations=int(1e3), tol=1e-3):
     np.ndarray, iteration
       The value function and the number of iterations it took to converge.
     """
-    V = np.zeros(env.observation_space.n)
+    value_func = np.zeros(env.observation_space.n)
     for i in range(max_iterations):
         delta = 0
+        value_func_new = np.zeros(env.observation_space.n)
         for s in range(env.observation_space.n):
-            v_s = np.max(
+            value_func_new[s] = np.max(
                 [
-                    sum(p * (r + gamma * V[s_]) for p, s_, r, _ in env.P[s][a])
+                    sum(p * (r + gamma * value_func[s_]) for p, s_, r, _ in env.P[s][a])
                     for a in range(env.action_space.n)
                 ]
             )
-            delta = max(delta, abs(v_s - V[s]))
-            V[s] = v_s
+            delta = max(delta, abs(value_func_new[s] - value_func[s]))
+            value_func[s] = value_func_new[s]
+        value_func = value_func_new
         if delta < tol:
-            return V, i
-    return V, max_iterations
+            return value_func, i
+    return value_func, max_iterations
 
 def value_iteration_async_ordered(env, gamma, max_iterations=int(1e3), tol=1e-3):
     """Runs value iteration for a given gamma and environment.
