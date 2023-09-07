@@ -48,10 +48,13 @@ def value_function_to_policy(env, gamma, value_function):
       in that state according to the environment dynamics and the
       given value function.
     """
-    # Hint: You might want to first calculate Q value,
-    #       and then take the argmax.
-    return policy
-
+    pi = np.zeros(env.observation_space.n, dtype=np.int)
+    for s in range(env.observation_space.n):
+        q_sa = np.zeros(env.action_space.n)
+        for a in range(env.action_space.n):
+            q_sa[a] = sum(p*(r + gamma*value_function[s_]) for p, s_, r, _ in env.P[s][a])
+        pi[s] = np.argmax(q_sa)
+    return pi
 
 def evaluate_policy_sync(env, value_func, gamma, policy, max_iterations=int(1e3), tol=1e-3):
     """Performs policy evaluation.
@@ -323,9 +326,21 @@ def value_iteration_sync(env, gamma, max_iterations=int(1e3), tol=1e-3):
     np.ndarray, iteration
       The value function and the number of iterations it took to converge.
     """
-    value_func = np.zeros(env.observation_space.n)  # initialize value function
-    return value_func, 0
-
+    V = np.zeros(env.observation_space.n)
+    for i in range(max_iterations):
+        delta = 0
+        for s in range(env.observation_space.n):
+            v_s = np.max(
+                [
+                    sum(p * (r + gamma * V[s_]) for p, s_, r, _ in env.P[s][a])
+                    for a in range(env.action_space.n)
+                ]
+            )
+            delta = max(delta, abs(v_s - V[s]))
+            V[s] = v_s
+        if delta < tol:
+            return V, i
+    return V, max_iterations
 
 def value_iteration_async_ordered(env, gamma, max_iterations=int(1e3), tol=1e-3):
     """Runs value iteration for a given gamma and environment.
@@ -478,13 +493,16 @@ def value_func_heatmap(env, value_func):
                 annot=False, linewidths=.5, cmap="GnBu_r", ax=ax,
                 yticklabels = np.arange(1, env.nrow+1)[::-1],
                 xticklabels = np.arange(1, env.nrow+1))
+    # Save as png
+    env_name = env.spec.id
+    plt.savefig(f"{env_name}-heatmap.png")
     # Other choices of cmap: YlGnBu
     # More: https://matplotlib.org/3.1.1/gallery/color/colormap_reference.html
     return None
 
 @dataclass
 class Args:
-    mode: str = "sync"
+    mode: str = "policy_iteration_sync"
     gamma: float = 0.9
     theta: float = 1e-3
 
@@ -492,14 +510,28 @@ def main(args: Args):
     # Define num_trials, gamma and whatever variables you need below.
     envs = ['Deterministic-4x4-FrozenLake-v0', 'Deterministic-8x8-FrozenLake-v0']
     # Setup test function
-    eval_fn = policy_iteration_sync if args.mode == "sync" else policy_iteration_async_ordered
+    if args.mode == "policy_iteration_sync":
+        eval_fn = policy_iteration_sync
+    elif args.mode == "policy_iteration_async_ordered":
+        eval_fn = policy_iteration_async_ordered
+    elif args.mode == "policy_iteration_async_randperm":
+        eval_fn = policy_iteration_async_randperm
+    elif args.mode == "value_iteration_sync":
+        eval_fn = value_iteration_sync
+    elif args.mode == "value_iteration_async_ordered":
+        eval_fn = value_iteration_async_ordered
     # Run the experiment
     for env_name in envs:
         env = env_wrapper(env_name)
-        policy, value_func, num_policy_iter, num_value_iter = eval_fn(env, args.gamma, tol=args.theta)
+        num_value_iter = -1
+        num_policy_iter = -1
+        if 'policy' in args.mode:
+            policy, value_func, num_policy_iter, num_value_iter = eval_fn(env, args.gamma, tol=args.theta)
+        elif 'value' in args.mode:
+            value_func, num_value_iter = eval_fn(env, args.gamma, tol=args.theta)
+            policy = value_function_to_policy(env, args.gamma, value_func)
         print('====================================')
         print(f"Policy for {env_name}")
-        print_policy(policy, lake_env.action_names)
         display_policy_letters(env, policy)
         print(f"Value function for {env_name}")
         print(value_func)
