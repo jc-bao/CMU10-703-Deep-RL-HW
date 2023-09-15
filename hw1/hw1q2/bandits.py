@@ -5,6 +5,7 @@ import random
 from dataclasses import dataclass
 import tyro
 from tqdm import trange
+import os
 
 random.seed(703)
 np.random.seed(703)
@@ -105,20 +106,21 @@ def boltzmannE(temperature, steps, k, realRewards, n):
     # TO DO: initialize q values per arm
     Q = np.zeros(k)
     # TO DO: initialize probability values for each arm
-
+    prob = np.exp(Q / temperature) / np.sum(np.exp(Q / temperature))
     # TO DO: implement the Boltzmann Exploration algorithm over all steps and return the expected rewards across all steps
     for t in range(steps):
-        prob = np.exp(Q * temperature) / np.sum(np.exp(Q * temperature))
         a = np.random.choice(k, p=prob)
         reward = realRewards[a] + np.random.normal(0, 1)
         n[a] += 1
         Q[a] += (1/n[a]) * (reward - Q[a])
         rewards[t] = reward
+        prob = np.exp(Q / temperature) / np.sum(np.exp(Q / temperature))
     return rewards
 
 # PLOT TEMPLATE
 def plotExplorations(paramList, explorationAlgorithmWrapper, title, sample_fn):
     # TO DO: for each parameter in the param list, plot the returns from the exploration Algorithm from each param on the same plot
+    # Zhicheng: What's this?
     x = np.arange(1,1001)
     plt.figure(figsize=(12,8))
     for param in paramList:
@@ -127,6 +129,8 @@ def plotExplorations(paramList, explorationAlgorithmWrapper, title, sample_fn):
         # plot all the Ys on the same plot
         plt.plot(x, y, label=f'param={param}')
         # save the data
+        if not os.path.exists('data'):
+            os.makedirs('data')
         np.save(f'data/bandit_{title}_param_{param}.npy', y)
     plt.xlabel('Steps')
     plt.ylabel('Expected Rewards')
@@ -138,7 +142,6 @@ def plotExplorations(paramList, explorationAlgorithmWrapper, title, sample_fn):
 
 def plotBest():
     # get all files's name from 'data/best' folder
-    import os
     files = os.listdir('data/best')
     # parse all files name in format bandit_{title}_param_{param}.npy, get title and param
     titles = []
