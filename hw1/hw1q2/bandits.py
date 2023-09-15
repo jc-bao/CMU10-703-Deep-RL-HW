@@ -106,7 +106,7 @@ def boltzmannE(temperature, steps, k, realRewards, n):
     # TO DO: initialize q values per arm
     Q = np.zeros(k)
     # TO DO: initialize probability values for each arm
-    prob = np.exp(Q / temperature) / np.sum(np.exp(Q / temperature))
+    prob = np.exp(Q * temperature) / np.sum(np.exp(Q * temperature))
     # TO DO: implement the Boltzmann Exploration algorithm over all steps and return the expected rewards across all steps
     for t in range(steps):
         a = np.random.choice(k, p=prob)
@@ -114,7 +114,7 @@ def boltzmannE(temperature, steps, k, realRewards, n):
         n[a] += 1
         Q[a] += (1/n[a]) * (reward - Q[a])
         rewards[t] = reward
-        prob = np.exp(Q / temperature) / np.sum(np.exp(Q / temperature))
+        prob = np.exp(Q * temperature) / np.sum(np.exp(Q * temperature))
     return rewards
 
 # PLOT TEMPLATE
