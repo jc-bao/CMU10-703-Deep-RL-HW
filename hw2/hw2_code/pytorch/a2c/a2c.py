@@ -78,20 +78,37 @@ class A2C(object):
         
         obss, next_obss, actions, rewards, dones = self.generate_episode(env, render=False)
 
-        if self.type == "Reinforce":
-            T = len(obss)
-            G = np.zeros(T)
+        # calculate G
+        T = len(obss)
+        G = np.zeros(T)
+        if self.type == "A2C":
+            for t in range(T):
+                if t + self.N < T:
+                    V = self.critic(torch.from_numpy(obss[t+self.N]).float()).squeeze()
+                else:
+                    V = 0
+                G[t] = np.sum([gamma ** (k - t) * rewards[k] for k in range(t, min(t+self.N, T))]) + gamma ** self.N * V
+        else:
             for t in range(T-1, -1, -1):
                 G[t] = rewards[t] + gamma * (G[t+1] if t+1 < T else 0)
-            G = torch.from_numpy(G).float()
+        G = torch.from_numpy(G).float()
 
-            action_probs = self.actor(torch.from_numpy(np.array(obss)).float())[torch.arange(T), actions]
-
+        action_probs = self.actor(torch.from_numpy(np.array(obss)).float())[torch.arange(T), actions]
+        if self.type == "Reinforce":
             actor_loss = -torch.sum(torch.log(action_probs) * G) / T
+        elif self.type == "Baseline":
+            baseline_values = self.critic(torch.from_numpy(np.array(obss)).float()).squeeze()
+            actor_loss = -torch.sum(torch.log(action_probs) * (G - baseline_values.detach())) / T
+            critic_loss = torch.sum((G - baseline_values) ** 2) / T
         else:
-            raise NotImplementedError()
+            critic_value = self.critic(torch.from_numpy(np.array(obss)).float()).squeeze()
+            critic_loss = torch.sum((G - critic_value) ** 2) / T
+            actor_loss = -torch.sum(torch.log(action_probs) * (G - critic_value.detach())) / T
 
         # Update
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
+        self.critic_optimizer.zero_grad()
+        critic_loss.backward()
+        self.critic_optimizer.step()
