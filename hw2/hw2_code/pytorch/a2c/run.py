@@ -15,6 +15,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 import tqdm
+import torch
 
 
 def parse_a2c_arguments():
@@ -32,6 +33,10 @@ def parse_a2c_arguments():
                         default=1e-4, help="The critic's learning rate.")
     parser.add_argument('--n', dest='n', type=int,
                         default=100, help="The value of N in N-step A2C.")
+    parser.add_argument('--baseline', dest='baseline', action='store_true',
+                        help="Whether to use baseline.")
+    parser.add_argument('--a2c', dest='a2c', action='store_true',
+                        help="Whether to use a2c.")
 
     parser_group = parser.add_mutually_exclusive_group(required=False)
     parser_group.add_argument('--render', dest='render',
@@ -63,7 +68,7 @@ def main_a2c(args):
 
     # Plot average performance of 5 trials
     num_seeds = 5
-    l = num_episodes//100
+    l = num_episodes // 100
     res = np.zeros((num_seeds, l))
 
     gamma = 0.99
@@ -72,8 +77,9 @@ def main_a2c(args):
         reward_means = []
 
         # TODO: create networks and setup reinforce/a2c
-
-
+        actor = NeuralNet(env.observation_space.shape[0], nA, torch.nn.Softmax(dim=-1))
+        critic = NeuralNet(env.observation_space.shape[0], 1, torch.nn.Identity())
+        A2C_net = A2C(actor, lr, args.n, nA, critic, critic_lr, baseline=args.baseline, a2c=args.a2c)
 
         for m in range(num_episodes):
             A2C_net.train(env, gamma=gamma)
