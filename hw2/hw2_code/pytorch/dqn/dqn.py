@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import random
 import numpy as np, gym, sys, copy, argparse
 import os
 import torch
@@ -49,8 +50,8 @@ class QNetwork():
         # Define your network architecture here. It is also a good idea to define any training operations
         # and optimizers here, initialize your variables, or alternately compile your model here.
         # TODO Implement this method
-
-        pass
+        self.model = FullyConnectedModel(env.observation_space.shape[0], env.action_space.n)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr)
 
     def save_model_weights(self, suffix):
         # Helper function to save your model / weights.
@@ -68,8 +69,7 @@ class QNetwork():
 
 
 class Replay_Memory():
-
-    def __init__(self, memory_size=50000, burn_in=10000):
+    def __init__(self, env, memory_size=50000, burn_in=10000):
         # The memory essentially stores transitions recorder from the agent
         # taking actions in the environment.
 
@@ -80,18 +80,41 @@ class Replay_Memory():
         # Hint: you might find this useful:
         # 		collections.deque(maxlen=memory_size)
         # TODO Implement this method
-        pass
+
+        # Initialize episodes as a deque
+        self.episodes = collections.deque(maxlen=memory_size)
+        
+        # Burn in episodes
+        # Generate a bunch of (state, action, reward, next_state) tuples using random policy
+        obs = env.reset()
+        for i in range(burn_in):
+            action = env.action_space.sample()
+            next_obs, reward, done, info = env.step(action)
+            self.episodes.append((obs, action, reward, next_obs, done))
+            obs = next_obs
+            if done:
+                obs = env.reset()
 
     def sample_batch(self, batch_size=32):
         # This function returns a batch of randomly sampled transitions - i.e. state, action, reward, next state, terminal flag tuples.
         # You will feed this to your model to train.
         # TODO Implement this method
-        pass
+        
+        # Sample a random batch of batch_size from self.episodes
+        batch = random.sample(self.episodes, batch_size)
+        return batch
 
     def append(self, transition):
         # Appends transition to the memory.
         # TODO Implement this method
-        pass
+        assert len(transition) == 5
+        
+        # Remove the oldest transition if memory is full
+        if len(self.episodes) == self.episodes.maxlen:
+            self.episodes.popleft()
+        
+        # Append the new transition
+        self.episodes.append(transition)
 
 
 class DQN_Agent():
@@ -105,23 +128,40 @@ class DQN_Agent():
     # (4) Create a function to test the Q Network's performance on the environment.
     # (5) Create a function for Experience Replay.
 
-    def __init__(self, environment_name, render=False):
+    def __init__(self, environment_name, lr, render=False):
 
         # Create an instance of the network itself, as well as the memory.
         # Here is also a good place to set environmental parameters,
         # as well as training parameters - number of episodes / iterations, etc.
         # TODO Implement this method
-        pass
+
+        self.env = gym.make(environment_name)
+
+        # Initialize QNetwork
+        self.qn = QNetwork(self.env, lr)
+        
+        # Initialize memory
+        self.memory = Replay_Memory(self.env)
+        
+        self.gamma = 0.99
 
     def epsilon_greedy_policy(self, q_values):
         # Creating epsilon greedy probabilities to sample from.
         # TODO Implement this method
-        pass
+
+        eps = 0.05
+        if np.random.rand() < eps:
+            action = np.random.choice(self.env.action_space.n)
+        else:
+            action = torch.argmax(q_values).item()
+        return action
 
     def greedy_policy(self, q_values):
         # Creating greedy policy for test time.
         # TODO Implement this method
-        pass
+        
+        action = torch.argmax(q_values).item()
+        return action
 
     def train(self):
         # In this function, we will train our network.
@@ -129,18 +169,77 @@ class DQN_Agent():
         # When use replay memory, you should interact with environment here, and store these
         # transitions to memory, while also updating your model.
         # TODO Implement this method
-        pass
+
+        self.qn.model.train()
+
+        def update_network():
+            # Sample a minibatch
+            minibatch = self.memory.sample_batch()
+            obs = torch.from_numpy(np.array([x[0] for x in minibatch]))
+            action = torch.Tensor([x[1] for x in minibatch]).long()
+            reward = torch.Tensor([x[2] for x in minibatch])
+            next_obs = torch.from_numpy(np.array([x[3] for x in minibatch]))
+            done = torch.Tensor([x[4] for x in minibatch])
+
+            # Compute target and output Q values
+            target_q = reward + self.gamma * torch.max(target_qn(next_obs)) * (1 - done)
+            output_q = self.qn.model(obs)[torch.arange(len(obs)), action]
+
+            # Backprop
+            loss = torch.nn.functional.mse_loss(output_q, target_q)
+            self.qn.optimizer.zero_grad()
+            loss.backward()
+            self.qn.optimizer.step()
+
+        num_episodes = 200
+        timesteps_between_updates = 50
+        timestep = 0
+        target_qn = copy.deepcopy(self.qn.model)
+        for i in range(num_episodes):
+            if i%20 == 0:
+                print("avg return", self.test())
+
+            obs = self.env.reset()
+            done = False
+            while not done:
+                # Simulate one step and add it to memory
+                action = self.epsilon_greedy_policy(self.qn.model(torch.from_numpy(obs).float()))
+                next_obs, reward, done, _ = self.env.step(action)
+                self.memory.append((obs, action, reward, next_obs, done))
+                obs = next_obs
+
+                # Do one minibatch of training
+                update_network()
+
+                # Replace target network every timesteps_between_updates
+                timestep += 1
+                if timestep % timesteps_between_updates == 0:
+                    target_qn = copy.deepcopy(self.qn.model)
 
     def test(self, model_file=None):
         # Evaluate the performance of your agent over 20 episodes, by calculating average cumulative rewards (returns) for the 20 episodes.
         # Here you need to interact with the environment, irrespective of whether you are using replay memory.
         # TODO Implement this method
-        pass
+        self.qn.model.eval()
 
-    def burn_in_memory(self):
-        # Initialize your replay memory with a burn_in number of episodes / transitions.
-        # TODO Implement this method
-        pass
+        total_ret = 0
+        num_episodes = 20
+        for i in range(num_episodes):
+            obs = self.env.reset()
+            done = False
+            ret = 0
+            while not done:
+                action = self.greedy_policy(self.qn.model(torch.from_numpy(obs).float()))
+                obs, reward, done, _ = self.env.step(action)
+                ret += reward
+            total_ret += ret
+        avg_ret = total_ret / num_episodes
+        return avg_ret
+
+    # def burn_in_memory(self):
+    #     # Initialize your replay memory with a burn_in number of episodes / transitions.
+    #     # TODO Implement this method
+    #     pass
 
 
 # Note: if you have problems creating video captures on servers without GUI,
@@ -184,6 +283,8 @@ def main(args):
     environment_name = args.env
 
     # TODO create an instance of the DQN_Agent class here, and then train / test it.
+    agent = DQN_Agent(environment_name, args.lr, render=args.render)
+    agent.train()
 
 if __name__ == '__main__':
     main(sys.argv)
