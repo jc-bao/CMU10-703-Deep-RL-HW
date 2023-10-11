@@ -195,9 +195,10 @@ class DQN_Agent():
         timesteps_between_updates = 50
         timestep = 0
         target_qn = copy.deepcopy(self.qn.model)
+        avg_returns = []
         for i in range(num_episodes):
-            if i%20 == 0:
-                print("avg return", self.test())
+            if i%10 == 0:
+                avg_returns.append(self.test())
 
             obs = self.env.reset()
             done = False
@@ -215,6 +216,7 @@ class DQN_Agent():
                 timestep += 1
                 if timestep % timesteps_between_updates == 0:
                     target_qn = copy.deepcopy(self.qn.model)
+        return avg_returns
 
     def test(self, model_file=None):
         # Evaluate the performance of your agent over 20 episodes, by calculating average cumulative rewards (returns) for the 20 episodes.
@@ -282,9 +284,30 @@ def main(args):
     args = parse_arguments()
     environment_name = args.env
 
-    # TODO create an instance of the DQN_Agent class here, and then train / test it.
-    agent = DQN_Agent(environment_name, args.lr, render=args.render)
-    agent.train()
+    returns_per_trial = []
+    for i in range(5):
+        print(f"Beginning trial {i}")
+        agent = DQN_Agent(environment_name, args.lr, render=args.render)
+        returns = agent.train() # (20,)
+        returns_per_trial.append(returns)
+    returns_per_trial = np.array(returns_per_trial) # (5, 20,)
+
+    ks = np.arange(20)*10
+    avs = np.mean(returns_per_trial, axis=0) # (20,)
+    maxs = np.max(returns_per_trial, axis=0) # (20,)
+    mins = np.min(returns_per_trial, axis=0) # (20,)
+
+    plt.fill_between(ks, mins, maxs, alpha=0.1)
+    plt.plot(ks, avs, '-o', markersize=1)
+
+    plt.xlabel('Episode', fontsize = 15)
+    plt.ylabel('Return', fontsize = 15)
+
+    if not os.path.exists('./plots'):
+        os.mkdir('./plots')
+
+    plt.title("DQN Learning Curve", fontsize = 24)
+    plt.savefig("./plots/dqn_curve.png")
 
 if __name__ == '__main__':
     main(sys.argv)
