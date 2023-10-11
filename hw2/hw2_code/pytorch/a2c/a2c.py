@@ -95,7 +95,7 @@ class A2C(object):
 
         action_probs = self.actor(torch.from_numpy(np.array(obss)).float())[torch.arange(T), actions]
         if self.type == "Reinforce":
-            actor_loss = -torch.sum(torch.log(action_probs) * G) / T
+            actor_loss = -torch.sum(torch.log(action_probs) * G.detach()) / T
         elif self.type == "Baseline":
             baseline_values = self.critic(torch.from_numpy(np.array(obss)).float()).squeeze()
             actor_loss = -torch.sum(torch.log(action_probs) * (G - baseline_values).detach()) / T
