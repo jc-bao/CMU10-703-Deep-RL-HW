@@ -79,10 +79,13 @@ def main_a2c(args):
         # TODO: create networks and setup reinforce/a2c
         actor = NeuralNet(env.observation_space.shape[0], nA, torch.nn.Softmax(dim=-1))
         critic = NeuralNet(env.observation_space.shape[0], 1, torch.nn.Identity())
-        A2C_net = A2C(actor, lr, args.n, nA, critic, critic_lr, baseline=args.baseline, a2c=args.a2c)
+        if args.baseline:
+            A2C_net = A2C(actor, lr, args.n, nA, critic, baseline_lr, baseline=args.baseline, a2c=args.a2c)
+        else:
+            A2C_net = A2C(actor, lr, args.n, nA, critic, critic_lr, baseline=args.baseline, a2c=args.a2c)
 
         for m in range(num_episodes):
-            A2C_net.train(env, gamma=gamma)
+            A2C_net.train(env, gamma=gamma, n=args.n)
             if m % 100 == 0:
                 print("Episode: {}".format(m))
                 G = np.zeros(20)

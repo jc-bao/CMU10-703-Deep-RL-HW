@@ -87,7 +87,7 @@ class A2C(object):
                     V = self.critic(torch.from_numpy(obss[t+self.N]).float()).squeeze()
                 else:
                     V = 0
-                G[t] = np.sum([gamma ** (k - t) * rewards[k] for k in range(t, min(t+self.N, T))]) + gamma ** self.N * V
+                G[t] = np.sum([gamma ** (k - t) * rewards[k] for k in range(t, min(t+self.N, T))]) + gamma ** (min(t+self.N, T) - t) * V
         else:
             for t in range(T-1, -1, -1):
                 G[t] = rewards[t] + gamma * (G[t+1] if t+1 < T else 0)
@@ -98,17 +98,22 @@ class A2C(object):
             actor_loss = -torch.sum(torch.log(action_probs) * G) / T
         elif self.type == "Baseline":
             baseline_values = self.critic(torch.from_numpy(np.array(obss)).float()).squeeze()
-            actor_loss = -torch.sum(torch.log(action_probs) * (G - baseline_values.detach())) / T
-            critic_loss = torch.sum((G - baseline_values) ** 2) / T
+            actor_loss = -torch.sum(torch.log(action_probs) * (G - baseline_values).detach()) / T
+            critic_loss = torch.sum((G.detach() - baseline_values) ** 2) / T
         else:
             critic_value = self.critic(torch.from_numpy(np.array(obss)).float()).squeeze()
-            critic_loss = torch.sum((G - critic_value) ** 2) / T
-            actor_loss = -torch.sum(torch.log(action_probs) * (G - critic_value.detach())) / T
+            critic_loss = torch.sum((G.detach() - critic_value) ** 2) / T
+            actor_loss = -torch.sum(torch.log(action_probs) * (G - critic_value).detach()) / T
 
         # Update
-        self.actor_optimizer.zero_grad()
-        actor_loss.backward()
-        self.actor_optimizer.step()
-        self.critic_optimizer.zero_grad()
-        critic_loss.backward()
-        self.critic_optimizer.step()
+        if self.type == "Reinforce":
+            self.actor_optimizer.zero_grad()
+            actor_loss.backward()
+            self.actor_optimizer.step()
+        else:
+            self.actor_optimizer.zero_grad()
+            self.critic_optimizer.zero_grad()
+            actor_loss.backward()
+            critic_loss.backward()
+            self.actor_optimizer.step()
+            self.critic_optimizer.step()
