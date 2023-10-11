@@ -182,7 +182,7 @@ class DQN_Agent():
             done = torch.Tensor([x[4] for x in minibatch])
 
             # Compute target and output Q values
-            target_q = reward + self.gamma * torch.max(target_qn(next_obs)) * (1 - done)
+            target_q = reward + self.gamma * torch.amax(target_qn(next_obs), dim=1) * (1 - done)
             output_q = self.qn.model(obs)[torch.arange(len(obs)), action]
 
             # Backprop
