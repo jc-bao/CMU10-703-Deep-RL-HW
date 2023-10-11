@@ -110,5 +110,6 @@ class A2C(object):
         actor_loss.backward()
         self.actor_optimizer.step()
         self.critic_optimizer.zero_grad()
-        critic_loss.backward()
-        self.critic_optimizer.step()
+        if self.type != "Reinforce":
+            critic_loss.backward()
+            self.critic_optimizer.step()

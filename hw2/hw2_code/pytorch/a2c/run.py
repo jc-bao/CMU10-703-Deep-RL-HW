@@ -102,7 +102,7 @@ def main_a2c(args):
     maxs = np.max(res, axis=0)
     mins = np.min(res, axis=0)
 
-    plt.fill_between(ks, mins, maxs, alpha=0.1)
+    plt.fill_between(ks, mins, maxs, alpha=0.4)
     plt.plot(ks, avs, '-o', markersize=1)
 
     plt.xlabel('Episode', fontsize = 15)

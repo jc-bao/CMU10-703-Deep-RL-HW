@@ -297,7 +297,7 @@ def main(args):
     maxs = np.max(returns_per_trial, axis=0) # (20,)
     mins = np.min(returns_per_trial, axis=0) # (20,)
 
-    plt.fill_between(ks, mins, maxs, alpha=0.1)
+    plt.fill_between(ks, mins, maxs, alpha=0.4)
     plt.plot(ks, avs, '-o', markersize=1)
 
     plt.xlabel('Episode', fontsize = 15)
