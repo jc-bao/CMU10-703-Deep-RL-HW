@@ -42,8 +42,11 @@ def generate_episode(env, policy):
     actions = []
     rewards = []
     while not done:
-        # WRITE CODE HERE
-        pass
+        # append the state, action, and reward to the lists
+        states.append(state)
+        actions.append(policy(state))
+        state, reward, done, _ = env.step(np.argmax(actions[-1]))
+        rewards.append(reward)
 
 
 class Imitation:
@@ -91,8 +94,41 @@ class Imitation:
             acc: (float) final accuracy of the trained policy
         """
         # WRITE CODE HERE
+        # train related
+        loss_fn = torch.nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(self.model.parameters())
+
+        # data related
+        dataset = torch.utils.data.TensorDataset(
+            torch.from_numpy(self._train_states).float(),
+            torch.from_numpy(self._train_actions).long(),
+        )
+        dataloader = torch.utils.data.DataLoader(
+            dataset, batch_size=batch_size, shuffle=True
+        )
+
+        # train
+        for ep in range(num_epochs):
+            for states, actions in dataloader:
+                # forward prop
+                logits = self.model(states)
+                loss = loss_fn(logits, actions)
+                # backward prop
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+        loss = loss.item()
+
+        # evaluate on the trained dataset
+        num_correct = 0
+        num_data = 0
+        for states, actions in dataloader:
+            action_pred = self.model(states).argmax(dim=1)
+            num_correct += (action_pred == actions).sum().item()
+            num_data += len(actions)
+        acc = num_correct / num_data
+
         # END
-        loss, acc = None, None
         return loss, acc
 
     def evaluate(self, policy, n_episodes=50):

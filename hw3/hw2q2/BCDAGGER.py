@@ -51,9 +51,28 @@ def generate_imitation_results(
             imitation_reward_vec = []
             for i in range(num_iterations):
                 # WRITE CODE HERE
-                pass
+                # data generation
+                if mode == 'behavior cloning':
+                    im.generate_behavior_cloning_data()
+                elif mode == 'dagger':
+                    im.generate_dagger_data()
+                else:
+                    raise NotImplementedError
+                
+                # training
+                loss, acc = im.train()
+                rew = im.evaluate(im.model)
+                
+                # log
+                loss_vec.append(loss)
+                acc_vec.append(acc)
+                imitation_reward_vec.append(rew)
 
-                # END
+            # append data
+            reward_data[num_episodes].append(imitation_reward_vec)
+            accuracy_data[num_episodes].append(acc_vec)
+            loss_data[num_episodes].append(loss_vec)
+            # END
 
     return reward_data, accuracy_data, loss_data, expert_reward
 
@@ -75,6 +94,14 @@ def plot_student_vs_expert(
     # Plot the results
     plt.figure(figsize=(12, 3))
     # WRITE CODE HERE
+    # plot reward
+    rew_mean = np.mean(reward_data[keys[0]], axis=0)
+
+    plt.plot(rew_mean, label='student')
+    plt.plot([expert_reward] * len(rew_mean), label='expert', linestyle='--')
+    plt.xlabel('Iteration')
+    plt.ylabel('Reward')
+    plt.legend()
 
     # END
     plt.savefig("p2_student_vs_expert_%s.png" % mode, dpi=300)
@@ -93,6 +120,20 @@ def plot_compare_num_episodes(mode, expert_file, keys, num_seeds=1, num_iteratio
     # Plot the results
     plt.figure(figsize=(12, 4))
     # WRITE CODE HERE
+
+    for key in keys:
+        # calcuate mean
+        rew_mean = np.mean(reward_data[key], axis=0)
+        acc_mean = np.mean(accuracy_data[key], axis=0)
+        loss_mean = np.mean(loss_data[key], axis=0)
+        
+        for i, item, name in zip(range(3), [rew_mean, acc_mean, loss_mean], ['reward', 'accuracy', 'loss']):
+            plt.subplot(1, 3, i+1)
+            plt.plot(item, label='num_episodes=%d' % key)
+            plt.xlabel('Iteration')
+            plt.ylabel(name)
+            plt.legend()
+        
 
     # END
     plt.savefig("p1_expert_data_%s.png" % mode, dpi=300)
