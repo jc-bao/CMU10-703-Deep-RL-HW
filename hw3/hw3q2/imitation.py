@@ -36,7 +36,9 @@ def generate_episode(env, policy):
     rewards: the reward received by the agent at each step.
     """
     done = False
-    state, _ = env.reset()
+    # Chaoyi Change
+    state = env.reset()
+    # state, _ = env.reset()
 
     states = []
     actions = []
@@ -44,9 +46,12 @@ def generate_episode(env, policy):
     while not done:
         # append the state, action, and reward to the lists
         states.append(state)
-        actions.append(policy(state))
+        action_tensor = policy(torch.from_numpy(state).float())
+        action_tensor = torch.softmax(action_tensor, dim=0)
+        actions.append(action_tensor.detach().numpy())
         state, reward, done, _ = env.step(np.argmax(actions[-1]))
         rewards.append(reward)
+    return states, actions, rewards
 
 
 class Imitation:
@@ -79,8 +84,18 @@ class Imitation:
         # You should collect states and actions from the student policy
         # (self.model), and then relabel the actions using the expert policy.
         # This method does not return anything.
+        self._train_states = []
+        self._train_actions = []
+        for _ in range(self.num_episodes):
+            states, actions, _ = generate_episode(self.env, self.model)
+            for s in states:
+                action_tensor = self.expert(torch.from_numpy(s).float())
+                action_tensor = torch.softmax(action_tensor, dim=0)
+                self._train_states.append(s)
+                self._train_actions.append(action_tensor.detach().numpy())
+        self._train_states = np.array(self._train_states)
+        self._train_actions = np.array(self._train_actions)
         # END
-        pass
 
     def train(self, num_epochs=1, batch_size=64):
         """
@@ -101,7 +116,7 @@ class Imitation:
         # data related
         dataset = torch.utils.data.TensorDataset(
             torch.from_numpy(self._train_states).float(),
-            torch.from_numpy(self._train_actions).long(),
+            torch.from_numpy(self._train_actions).float(),
         )
         dataloader = torch.utils.data.DataLoader(
             dataset, batch_size=batch_size, shuffle=True
@@ -123,7 +138,7 @@ class Imitation:
         num_correct = 0
         num_data = 0
         for states, actions in dataloader:
-            action_pred = self.model(states).argmax(dim=1)
+            action_pred = torch.softmax(self.model(states), dim=1)
             num_correct += (action_pred == actions).sum().item()
             num_data += len(actions)
         acc = num_correct / num_data

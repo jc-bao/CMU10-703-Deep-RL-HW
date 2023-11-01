@@ -41,7 +41,9 @@ def generate_imitation_results(
 
             # Create the environment and set seed.
             env = gym.make("CartPole-v0")
-            env.reset(seed=t)
+            # Chaoyi Change
+            env.reset()
+            # env.reset(seed=t)
             im = Imitation(env, num_episodes, expert_file)
             expert_reward = im.evaluate(im.expert)
             print("Expert reward: %.2f" % expert_reward)
@@ -94,14 +96,15 @@ def plot_student_vs_expert(
     # Plot the results
     plt.figure(figsize=(12, 3))
     # WRITE CODE HERE
-    # plot reward
-    rew_mean = np.mean(reward_data[keys[0]], axis=0)
-
-    plt.plot(rew_mean, label='student')
-    plt.plot([expert_reward] * len(rew_mean), label='expert', linestyle='--')
-    plt.xlabel('Iteration')
-    plt.ylabel('Reward')
-    plt.legend()
+    # plot reward, accuracy, loss
+    for i, item, name in zip(range(3), [reward_data, acc_data, loss_data], ['reward', 'accuracy', 'loss']):
+        plt.subplot(1, 3, i+1)
+        plt.plot(item[keys[0]][0], label='student')
+        if name == 'reward':
+            plt.plot([expert_reward] * len(item[keys[0]][0]), label='expert', linestyle='--')
+        plt.xlabel('Iteration')
+        plt.ylabel(name)
+        plt.legend()
 
     # END
     plt.savefig("p2_student_vs_expert_%s.png" % mode, dpi=300)
@@ -151,20 +154,20 @@ def main():
     # expert_file = "expert_tf.h5"
 
     # Switch mode
-    mode = "behavior cloning"
-    # mode = "dagger"
+    # mode = "behavior cloning"
+    mode = "dagger"
 
     # Change the list of num_episodes below for testing and different tasks
-    keys = [100]  # [1, 10, 50, 100]
-    num_seeds = 3  # 3
+    keys = [1, 10, 50, 100] # [100]  # [1, 10, 50, 100]
+    num_seeds = 3
     num_iterations = 100  # Number of training iterations. Use a small number
     # (e.g., 10) for debugging, and then try a larger number
     # (e.g., 100).
 
     # Q2.1.1, Q2.2.1
-    plot_student_vs_expert(
-        mode, expert_file, keys, num_seeds=num_seeds, num_iterations=num_iterations
-    )
+    # plot_student_vs_expert(
+    #     mode, expert_file, keys, num_seeds=num_seeds, num_iterations=num_iterations
+    # )
 
     # Q2.1.2, Q2.2.2
     plot_compare_num_episodes(

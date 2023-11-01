@@ -1,6 +1,6 @@
 tqdm
 future
-gym<=0.21.0
+gym # <=0.21.0
 scipy
 six
 seaborn
