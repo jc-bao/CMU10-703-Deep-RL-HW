@@ -48,8 +48,10 @@ def generate_episode(env, policy):
         states.append(state)
         action_tensor = policy(torch.from_numpy(state).float())
         action_tensor = torch.softmax(action_tensor, dim=0)
-        actions.append(action_tensor.detach().numpy())
-        state, reward, done, _ = env.step(np.argmax(actions[-1]))
+        action = np.argmax(action_tensor.detach().numpy())
+        action_one_hot = action_to_one_hot(env, action)
+        actions.append(action_one_hot)
+        state, reward, done, _ = env.step(action)
         rewards.append(reward)
     return states, actions, rewards
 
@@ -91,8 +93,10 @@ class Imitation:
             for s in states:
                 action_tensor = self.expert(torch.from_numpy(s).float())
                 action_tensor = torch.softmax(action_tensor, dim=0)
+                action = np.argmax(action_tensor.detach().numpy())
+                action_one_hot = action_to_one_hot(self.env, action)
                 self._train_states.append(s)
-                self._train_actions.append(action_tensor.detach().numpy())
+                self._train_actions.append(action_one_hot)
         self._train_states = np.array(self._train_states)
         self._train_actions = np.array(self._train_actions)
         # END
@@ -139,8 +143,10 @@ class Imitation:
         num_data = 0
         for states, actions in dataloader:
             action_pred = torch.softmax(self.model(states), dim=1)
-            num_correct += (action_pred == actions).sum().item()
-            num_data += len(actions)
+            action_pred = torch.argmax(action_pred, dim=1)
+            action_expert = torch.argmax(actions, dim=1)
+            num_correct += (action_pred == action_expert).sum().item()
+            num_data += actions.shape[0]
         acc = num_correct / num_data
 
         # END

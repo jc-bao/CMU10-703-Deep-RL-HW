@@ -154,25 +154,31 @@ def main():
     # expert_file = "expert_tf.h5"
 
     # Switch mode
-    # mode = "behavior cloning"
-    mode = "dagger"
+    mode = "behavior cloning"
+    # mode = "dagger"
 
     # Change the list of num_episodes below for testing and different tasks
-    keys = [1, 10, 50, 100] # [100]  # [1, 10, 50, 100]
-    num_seeds = 3
+    keys = [100] # [100]  # [1, 10, 50, 100]
+    num_seeds = 1
     num_iterations = 100  # Number of training iterations. Use a small number
     # (e.g., 10) for debugging, and then try a larger number
     # (e.g., 100).
 
     # Q2.1.1, Q2.2.1
-    # plot_student_vs_expert(
-    #     mode, expert_file, keys, num_seeds=num_seeds, num_iterations=num_iterations
-    # )
+    for mode in ['behavior cloning', 'dagger']:
+        for num_seeds in [1, 3]:
+            if num_seeds == 1:
+                keys = [100]
+                plot_student_vs_expert(
+                    mode, expert_file, keys, num_seeds=num_seeds, num_iterations=num_iterations
+                )
+            else:
+                keys = [1, 10, 50, 100] 
+                plot_compare_num_episodes(
+                    mode, expert_file, keys, num_seeds=num_seeds, num_iterations=num_iterations
+                )
 
     # Q2.1.2, Q2.2.2
-    plot_compare_num_episodes(
-        mode, expert_file, keys, num_seeds=num_seeds, num_iterations=num_iterations
-    )
 
 
 if __name__ == "__main__":
