@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import random
 from queue import Queue
+from .model_pytorch import make_model
 # Import make_model here from the approptiate model_*.py file
 # This model should be the same as problem 2
 
