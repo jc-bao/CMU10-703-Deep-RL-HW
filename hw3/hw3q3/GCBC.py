@@ -5,7 +5,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import random
 from queue import Queue
-from .model_pytorch import make_model
+# relative import make_model from model_pytorch.py
+from model_pytorch import make_model
+import torch
+from tqdm import trange
+import tyro
+from dataclasses import dataclass
 # Import make_model here from the approptiate model_*.py file
 # This model should be the same as problem 2
 
@@ -258,7 +263,7 @@ class GCBC:
         # action_choices = 4
 
         # Initialize Optimizer here
-        self.optimizer = None
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-3)
 
     def generate_behavior_cloning_data(self):
         # training state should be a concatenation of state and goal
@@ -266,9 +271,21 @@ class GCBC:
         self._train_actions = []
         
         # WRITE CODE HERE
+        for traj, actions in zip(self.expert_trajs, self.expert_actions):
+            # append expert experience into training data
+            for state, action in zip(traj, actions):
+                # set goal state to the final state
+                goal = traj[-1]
+                # concatenate state and goal to get training state
+                training_state = np.concatenate([state, goal])
+                self._train_states.append(training_state)
+                # append action to training action
+                training_action = self.env.act_map[tuple(self.env.act_set[action])]
+                self._train_actions.append(training_action)
+        
         # END
 
-        self._train_states = np.array(self._train_states).astype(np.float) # size: (*, 4)
+        self._train_states = np.array(self._train_states).astype(np.float32) # size: (*, 4)
         self._train_actions = np.array(self._train_actions) # size: (*, )
         
     def generate_relabel_data(self):
@@ -277,9 +294,21 @@ class GCBC:
         self._train_actions = []
 
         # WRITE CODE HERE
+        for traj, actions in zip(self.expert_trajs, self.expert_actions):
+            # append expert experience into training data
+            for i, (state, action) in enumerate(zip(traj, actions)):
+                # set goal state to a random selected future state in the same trajectory
+                goal_idx = np.random.randint(i, len(traj))
+                goal = traj[goal_idx]
+                # concatenate state and goal to get training state
+                training_state = np.concatenate([state, goal])
+                self._train_states.append(training_state)
+                # append action to training action
+                training_action = self.env.act_map[tuple(self.env.act_set[action])]
+                self._train_actions.append(training_action)
         # END
 
-        self._train_states = np.array(self._train_states).astype(np.float) # size: (*, 4)
+        self._train_states = np.array(self._train_states).astype(np.float32) # size: (*, 4)
         self._train_actions = np.array(self._train_actions) # size: (*, 4)
 
     def train(self, num_epochs=20, batch_size=256):
@@ -293,8 +322,31 @@ class GCBC:
             acc: (float) final accuracy of the trained policy
         """
         # WRITE CODE HERE
+        for ep in range(num_epochs):
+            # shuffle data
+            idx = np.arange(len(self._train_states))
+            np.random.shuffle(idx)
+            # train in batches
+            for i in range(0, len(self._train_states), batch_size):
+                # get batch
+                batch_idx = idx[i:i+batch_size]
+                batch_states = self._train_states[batch_idx]
+                batch_actions = self._train_actions[batch_idx]
+                # convert to tensor
+                batch_states = torch.from_numpy(batch_states)
+                batch_actions = torch.from_numpy(batch_actions)
+                # forward pass
+                logits = self.model(batch_states)
+                # compute accuracy
+                acc = torch.sum(torch.argmax(logits, dim=1) == batch_actions).item() / len(batch_actions)
+                # compute loss
+                loss = torch.nn.functional.cross_entropy(logits, batch_actions)
+                # backward pass
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
         # END
-        loss, acc = None, None
+        loss = loss.item()
         return loss, acc
 
 
@@ -303,6 +355,8 @@ def evaluate_gc(env, policy, n_episodes=50):
     for _ in range(n_episodes):
         info = generate_gc_episode(env, policy)
         # WRITE CODE HERE
+        if info == 'succ':
+            succs += 1
         # END
     succs /= n_episodes
     return succs
@@ -321,10 +375,15 @@ def generate_gc_episode(env, policy):
     state = env.reset()
     while not done:
         # WRITE CODE HERE
-        pass
+        # run policy
+        state = torch.FloatTensor(state)
+        logits = policy.model(state)
+        action = torch.argmax(logits).item()
+
+        # step env
+        state, _, done, info = env.step(action)
         # END
 
-    info = None
     return info
 
 def generate_random_trajs(env):
@@ -333,6 +392,27 @@ def generate_random_trajs(env):
     random_actions = []
 
     # WRITE CODE HERE
+    for i in range(N):
+        traj, acts = [], []
+        # reset environment
+        s, g = env.sample_sg()
+        env.reset(s, g)
+        # generate random trajectory
+        while True:
+            # sample a random action
+            a = np.random.randint(4)
+            # transition to next state
+            next_state, _, done, _ = env.step(a)
+            # append to trajectory
+            traj.append(next_state)
+            acts.append(a)
+            # check if done
+            if done:
+                break
+        # append to list
+        random_trajs.append(np.array(traj))
+        random_actions.append(np.array(acts))
+
 
     # END
     # You should obtain random_trajs, random_actions from random policy
@@ -341,9 +421,15 @@ def generate_random_trajs(env):
 
     return random_trajs, random_actions
 
-def run_GCBC():
-    # mode = "vanilla"
-    mode = "relabel"
+@dataclass 
+class Args:
+    sample_mode: str = "expert" # "expert" or "random"
+    mode: str = "vanilla" # "vanilla" or "relabel"
+
+
+def run_GCBC(args: Args):
+    sample_mode = args.sample_mode
+    mode = args.mode
     num_seeds = 5
     loss_vecs = []
     acc_vecs = []
@@ -358,7 +444,13 @@ def run_GCBC():
 
         # generate new set of trajectories
         # obtain either expert or random trajectories
-        expert_trajs, expert_actions = None, None
+        print('generating trajectories...')
+        if sample_mode == "expert":
+            expert_trajs, expert_actions = shortest_path_expert(env)
+        elif sample_mode == "random":
+            expert_trajs, expert_actions = generate_random_trajs(env)
+        else:
+            raise NotImplementedError
         gcbc = GCBC(env, expert_trajs, expert_actions)
 
         if mode == "vanilla":
@@ -366,7 +458,8 @@ def run_GCBC():
         else:
             gcbc.generate_relabel_data()
 
-        for e in range(150):
+        print('training...')
+        for e in trange(150):
             loss, acc = gcbc.train(num_epochs=20)
             succ = evaluate_gc(env, gcbc)
             loss_vec.append(loss)
@@ -382,14 +475,30 @@ def run_GCBC():
     succ_vec = np.mean(np.array(succ_vecs), axis = 0).tolist()
 
     ### Plot the results
+    print('plotting...')
     from scipy.ndimage import uniform_filter
     # you may use uniform_filter(succ_vec, 5) to smooth succ_vec
     plt.figure(figsize=(12, 3))
     # WRITE CODE HERE
+    # plot success rate, training loss and training accuracy
+    plt.subplot(1, 3, 1)
+    plt.plot(succ_vec)
+    plt.xlabel('Epoch')
+    plt.ylabel('Success Rate')
+    plt.title('Success Rate')
+    plt.subplot(1, 3, 2)
+    plt.plot(loss_vec)
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Loss')
+    plt.subplot(1, 3, 3)
+    plt.plot(acc_vec)
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy')
+    plt.title('Accuracy')
     # END
-    plt.savefig('p2_gcbc_%s.png' % mode, dpi=300)
+    plt.savefig(f'p2_gcbc_{mode}_{sample_mode}.png', dpi=300)
     plt.show()
-
 
 
 # build env
@@ -397,5 +506,5 @@ l, T = 5, 30
 env = FourRooms(l, T)
 ### Visualize the map
 # env.render_map()
-shortest_path_expert(env)
-# run_GCBC()
+# shortest_path_expert(env)
+run_GCBC()
