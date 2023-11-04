@@ -9,11 +9,10 @@ class FullyConnectedModel(torch.nn.Module):
         # WRITE CODE HERE
         # Add layers to the model:
         # a fully connected layer with 10 units
+        self.fc1 = torch.nn.Linear(input_dim, 10)
         # a tanh activation
         # another fully connected layer with out_dim (the number of actions)
-        self.fc1 = torch.nn.Linear(input_dim, 10)
         self.fc2 = torch.nn.Linear(10, output_dim)
-
         # Do not include a softmax activation function if using Pytorch!
         # Pytorch's implementation of the CrossEnropyLoss() assumes that
         # the network has not applied a softmax to the output.

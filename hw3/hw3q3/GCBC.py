@@ -222,14 +222,12 @@ def shortest_path_expert(env):
         # find shortest path
         path = BFS_search(env, s, g)
         # convert path to trajectory
-        traj = []
-        for state in path:
-            traj.append(state[0])
-        traj = np.array(traj)
-        # convert trajectory to actions
+        traj = [np.concatenate([s, g])]
         actions = []
         for state in path:
+            traj.append(np.concatenate([state[0], g]))
             actions.append(state[1])
+        traj = np.array(traj)
         actions = np.array(actions)
         # append to list
         expert_trajs.append(traj)
@@ -274,14 +272,8 @@ class GCBC:
         for traj, actions in zip(self.expert_trajs, self.expert_actions):
             # append expert experience into training data
             for state, action in zip(traj, actions):
-                # set goal state to the final state
-                goal = traj[-1]
-                # concatenate state and goal to get training state
-                training_state = np.concatenate([state, goal])
-                self._train_states.append(training_state)
-                # append action to training action
-                training_action = self.env.act_map[tuple(self.env.act_set[action])]
-                self._train_actions.append(training_action)
+                self._train_states.append(state)
+                self._train_actions.append(action)
         
         # END
 
@@ -298,14 +290,14 @@ class GCBC:
             # append expert experience into training data
             for i, (state, action) in enumerate(zip(traj, actions)):
                 # set goal state to a random selected future state in the same trajectory
-                goal_idx = np.random.randint(i, len(traj))
-                goal = traj[goal_idx]
+                goal_idx = np.random.randint(i+1, len(traj))
+                # for goal_idx in np.arange(i+1, len(traj)):
+                goal = traj[goal_idx][:2]
                 # concatenate state and goal to get training state
-                training_state = np.concatenate([state, goal])
+                training_state = np.concatenate([state[:2], goal])
                 self._train_states.append(training_state)
                 # append action to training action
-                training_action = self.env.act_map[tuple(self.env.act_set[action])]
-                self._train_actions.append(training_action)
+                self._train_actions.append(action)
         # END
 
         self._train_states = np.array(self._train_states).astype(np.float32) # size: (*, 4)
@@ -322,6 +314,9 @@ class GCBC:
             acc: (float) final accuracy of the trained policy
         """
         # WRITE CODE HERE
+        total_loss = 0.0
+        total_acc = 0.0
+        cnt = 0
         for ep in range(num_epochs):
             # shuffle data
             idx = np.arange(len(self._train_states))
@@ -337,17 +332,20 @@ class GCBC:
                 batch_actions = torch.from_numpy(batch_actions)
                 # forward pass
                 logits = self.model(batch_states)
-                # compute accuracy
-                acc = torch.sum(torch.argmax(logits, dim=1) == batch_actions).item() / len(batch_actions)
+                # compute accuracy NOTE: use sum instead of mean to avoid bool to float conversion
+                acc = torch.sum(torch.argmax(torch.softmax(logits, dim=1), dim=1) == batch_actions).item() / len(batch_actions)
+                total_acc += acc
                 # compute loss
                 loss = torch.nn.functional.cross_entropy(logits, batch_actions)
+                total_loss += loss.item()
+                # counter
+                cnt += 1
                 # backward pass
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
         # END
-        loss = loss.item()
-        return loss, acc
+        return total_loss / cnt, total_acc / cnt
 
 
 def evaluate_gc(env, policy, n_episodes=50):
@@ -375,13 +373,15 @@ def generate_gc_episode(env, policy):
     state = env.reset()
     while not done:
         # WRITE CODE HERE
+
         # run policy
         state = torch.FloatTensor(state)
         logits = policy.model(state)
-        action = torch.argmax(logits).item()
+        action = torch.argmax(torch.softmax(logits, dim=0)).item()
 
         # step env
         state, _, done, info = env.step(action)
+
         # END
 
     return info
@@ -393,18 +393,18 @@ def generate_random_trajs(env):
 
     # WRITE CODE HERE
     for i in range(N):
-        traj, acts = [], []
         # reset environment
         s, g = env.sample_sg()
-        env.reset(s, g)
+        obs = env.reset(s, g)
+        traj, acts = [obs], []
         # generate random trajectory
         while True:
             # sample a random action
             a = np.random.randint(4)
             # transition to next state
-            next_state, _, done, _ = env.step(a)
+            obs, rew, done, info = env.step(a)
             # append to trajectory
-            traj.append(next_state)
+            traj.append(obs)
             acts.append(a)
             # check if done
             if done:
@@ -425,6 +425,7 @@ def generate_random_trajs(env):
 class Args:
     sample_mode: str = "expert" # "expert" or "random"
     mode: str = "vanilla" # "vanilla" or "relabel"
+    exp: str = "gcbc" # "gcbc" or "render" or "expert"
 
 
 def run_GCBC(args: Args):
@@ -455,8 +456,10 @@ def run_GCBC(args: Args):
 
         if mode == "vanilla":
             gcbc.generate_behavior_cloning_data()
-        else:
+        elif mode == "relabel":
             gcbc.generate_relabel_data()
+        else:
+            raise NotImplementedError
 
         print('training...')
         for e in trange(150):
@@ -465,7 +468,7 @@ def run_GCBC(args: Args):
             loss_vec.append(loss)
             acc_vec.append(acc)
             succ_vec.append(succ)
-            print(e, round(loss,3), round(acc,3), succ)
+            print('ep', e, ' loss', round(loss,3), ' acc', round(acc,3), ' succ', succ)
         loss_vecs.append(loss_vec)
         acc_vecs.append(acc_vec)
         succ_vecs.append(succ_vec)
@@ -478,13 +481,15 @@ def run_GCBC(args: Args):
     print('plotting...')
     from scipy.ndimage import uniform_filter
     # you may use uniform_filter(succ_vec, 5) to smooth succ_vec
+    succ_vec_smooth = uniform_filter(succ_vec, 5)
     plt.figure(figsize=(12, 3))
     # WRITE CODE HERE
     # plot success rate, training loss and training accuracy
     plt.subplot(1, 3, 1)
-    plt.plot(succ_vec)
+    plt.plot(succ_vec_smooth)
     plt.xlabel('Epoch')
     plt.ylabel('Success Rate')
+    plt.ylim(0, 1)
     plt.title('Success Rate')
     plt.subplot(1, 3, 2)
     plt.plot(loss_vec)
@@ -495,6 +500,7 @@ def run_GCBC(args: Args):
     plt.plot(acc_vec)
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy')
+    plt.ylim(0, 1)
     plt.title('Accuracy')
     # END
     plt.savefig(f'p2_gcbc_{mode}_{sample_mode}.png', dpi=300)
@@ -505,6 +511,12 @@ def run_GCBC(args: Args):
 l, T = 5, 30
 env = FourRooms(l, T)
 ### Visualize the map
-# env.render_map()
-# shortest_path_expert(env)
-run_GCBC()
+args = tyro.cli(Args)
+if args.exp == "render":
+    env.render_map()
+elif args.exp == "expert":
+    shortest_path_expert(env)
+elif args.exp == "gcbc":
+    run_GCBC(args)
+else:
+    raise NotImplementedError
