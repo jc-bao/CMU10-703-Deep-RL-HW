@@ -57,5 +57,5 @@ matplotlib.rc("savefig", **savefig)
 ###     MISC     ###
 ####################
 # Mute tensorflow deprecation warnings
-import tensorflow as tf
+# import tensorflow as tf
 # if type(tf.contrib) != type(tf): tf.contrib._warning = None

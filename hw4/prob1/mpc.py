@@ -142,9 +142,15 @@ class MPC:
 
     def predict_next_state_gt(self, states, actions):
         """ Given a list of state action pairs, use the ground truth dynamics to predict the next state"""
-        # TODO: write your code here
-
-        raise NotImplementedError
+        res = []
+        popsize = np.shape(states)[0]
+        for member in range(popsize):
+            for particle in range(self.num_particles):
+                state = states[member * self.num_particles + particle]
+                action = actions[member]
+                next_state = self.env.get_nxt_state(state, action)
+                res.append(next_state)
+        return np.stack(res)
 
     def train(self, obs_trajs, acs_trajs, rews_trajs, num_train_itrs=5):
         """ 
