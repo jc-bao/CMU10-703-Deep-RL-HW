@@ -11,6 +11,7 @@ from agent import Agent, RandomPolicy
 from mpc import MPC
 from cem import CEMOptimizer
 from model import PENN
+from tqdm import tqdm
 
 # Logging
 now = config.Now()
@@ -82,8 +83,7 @@ class ExperimentModelDynamics:
 
     def test(self, num_episodes, optimizer="cem"):
         samples = []
-        for j in range(num_episodes):
-            if j == 0 or (j + 1) % INFO == 0: log.info("Test episode {}".format(j))
+        for j in tqdm(range(num_episodes), 'Sampling test episodes'):
             samples.append(
                 self.agent.sample(
                     self.task_horizon, self.cem_policy if optimizer == "cem" else self.random_policy
@@ -269,8 +269,8 @@ def train_pets(device=None):
 
 if __name__ == "__main__":
     gpu_number = 0
-    device = torch.device('cuda:%d' % gpu_number if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    test_cem_gt_dynamics(50)    # Q1.1
-    # train_single_dynamics(50, device=device)   # Q1.2
+    # test_cem_gt_dynamics(50)    # Q1.1
+    train_single_dynamics(50, device=device)   # Q1.2
     # train_pets(device=device)  # Q1.3

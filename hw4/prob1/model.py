@@ -5,6 +5,7 @@ import torch.nn as nn
 import operator
 from functools import reduce
 from utils.util import ZFilter
+from tqdm import tqdm
 
 HIDDEN1_UNITS = 400
 HIDDEN2_UNITS = 400
@@ -60,9 +61,13 @@ class PENN(nn.Module):
         return mean, logvar
 
     def get_loss(self, targ, mean, logvar):
-        # TODO: write your code here
-
-        raise NotImplementedError
+        '''
+        targ: (batch_size, state_dim)
+        mean: (batch_size, state_dim)
+        logvar: (batch_size, state_dim)
+        '''
+        loss = torch.nn.GaussianNLLLoss()
+        return loss(mean, targ, logvar.exp())
 
     def create_network(self, n):
         layer_sizes = [self.state_dim + self.action_dim, HIDDEN1_UNITS, HIDDEN2_UNITS, HIDDEN3_UNITS]
@@ -71,6 +76,19 @@ class PENN(nn.Module):
                          for a, b in zip(layer_sizes[0:-1], layer_sizes[1:])])
         layers += [nn.Linear(layer_sizes[-1], 2 * self.state_dim)]
         return nn.Sequential(*layers)
+    
+    def train_step(self, batch_inputs, batch_targets):
+        self.opt.zero_grad()
+        batch_inputs = batch_inputs.to(self.device)
+        batch_targets = batch_targets.to(self.device)
+        batch_outputs = self.forward(batch_inputs)
+        total_loss = 0
+        for i in range(self.num_nets):
+            loss = self.get_loss(batch_targets[i], batch_outputs[i][0], batch_outputs[i][1])
+            total_loss += loss
+        total_loss.backward()
+        self.opt.step()
+        return total_loss / self.num_nets
 
     def train_model(self, inputs, targets, batch_size=128, num_train_itrs=5):
         """
@@ -82,6 +100,17 @@ class PENN(nn.Module):
             List containing the average loss of all the networks at each train iteration
 
         """
-        # TODO: write your code here
+        # TODO: revisit https://piazza.com/class/llmlh1ivh0156m/post/279
+        losses = []
+        for epoch in tqdm(range(num_train_itrs), desc="Training"):
+            permutation = torch.randperm(inputs.shape[0])
+            avg_loss = 0
+            for start in range(0, inputs.shape[0], batch_size):
+                end = min(start + batch_size, inputs.shape[0])
+                indices = permutation[start:end]
+                batch_inputs, batch_targets = inputs[indices], targets[indices]
+                avg_loss += self.train_step(batch_inputs, batch_targets) * (end - start)
+            avg_loss = avg_loss / inputs.shape[0]
+            losses.append(avg_loss.item())
 
-        raise NotImplementedError
+        return losses

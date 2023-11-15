@@ -6,6 +6,7 @@ from randopt import RandomOptimizer
 import logging
 log = logging.getLogger('root')
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class MPC:
     def __init__(self, env, plan_horizon, model, popsize, num_elites, max_iters,
@@ -138,12 +139,32 @@ class MPC:
         # REMEMBER: model prediction is delta   
         # Next state = delta sampled from model prediction + CURRENT state!
 
-        raise NotImplementedError
+        popsize = np.shape(actions)[0]
+        actions = np.repeat(actions, self.num_particles, axis=0) # (popsize * num_particles, action_dim)
+        res = []
+        batch_size = 128
+        for start in range(0, popsize*self.num_particles, batch_size):
+            end = min(start + batch_size, popsize*self.num_particles)
+            states_batch = states[start:end]
+            actions_batch = actions[start:end]
+            inputs_batch = np.concatenate([states_batch, actions_batch], axis=1) # (batch_size, state_dim + action_dim)
+            inputs_batch = torch.from_numpy(inputs_batch).float()
+            inputs_batch = inputs_batch.to(device)
+
+            means, logvars = self.model.get_output(self.model.networks[0](inputs_batch)) # both (batch_size, state_dim)
+
+            m = torch.distributions.MultivariateNormal(means, torch.diag_embed(torch.exp(logvars)))
+            deltas = m.sample() # (batch_size, state_dim)
+            next_states = states_batch + deltas.cpu().detach().numpy()
+            res.append(next_states)
+        res = np.concatenate(res, axis=0)
+                
+        return res
 
     def predict_next_state_gt(self, states, actions):
         """ Given a list of state action pairs, use the ground truth dynamics to predict the next state"""
         res = []
-        popsize = np.shape(states)[0]
+        popsize = np.shape(actions)[0]
         for member in range(popsize):
             for particle in range(self.num_particles):
                 state = states[member * self.num_particles + particle]
@@ -170,7 +191,7 @@ class MPC:
             new_train_targs.append(obs[1:, 0:-2] - obs[:-1, 0:-2])
         self.train_in = np.concatenate([self.train_in] + new_train_in, axis=0)
         self.train_targs = np.concatenate([self.train_targs] + new_train_targs, axis=0)
-        loss= self.model.train_model(self.train_in, self.train_targs, num_train_itrs=num_train_itrs)
+        loss= self.model.train_model(torch.from_numpy(self.train_in).float(), torch.from_numpy(self.train_targs).float(), num_train_itrs=num_train_itrs)
         self.has_been_trained = True
         return loss
 
