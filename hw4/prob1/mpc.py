@@ -143,6 +143,8 @@ class MPC:
         actions = np.repeat(actions, self.num_particles, axis=0) # (popsize * num_particles, action_dim)
         res = []
         batch_size = 128
+        # Pick random network (TS1)
+        network_idx = np.random.randint(0, self.num_nets)
         for start in range(0, popsize*self.num_particles, batch_size):
             end = min(start + batch_size, popsize*self.num_particles)
             states_batch = states[start:end]
@@ -151,7 +153,7 @@ class MPC:
             inputs_batch = torch.from_numpy(inputs_batch).float()
             inputs_batch = inputs_batch.to(device)
 
-            means, logvars = self.model.get_output(self.model.networks[0](inputs_batch)) # both (batch_size, state_dim)
+            means, logvars = self.model.get_output(self.model.networks[network_idx](inputs_batch)) # both (batch_size, state_dim)
 
             m = torch.distributions.MultivariateNormal(means, torch.diag_embed(torch.exp(logvars)))
             deltas = m.sample() # (batch_size, state_dim)
