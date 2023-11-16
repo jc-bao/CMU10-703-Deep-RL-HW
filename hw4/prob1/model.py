@@ -77,18 +77,15 @@ class PENN(nn.Module):
         layers += [nn.Linear(layer_sizes[-1], 2 * self.state_dim)]
         return nn.Sequential(*layers)
     
-    def train_step(self, batch_inputs, batch_targets):
+    def train_step(self, model_idx, batch_inputs, batch_targets):
         self.opt.zero_grad()
         batch_inputs = batch_inputs.to(self.device)
         batch_targets = batch_targets.to(self.device)
-        batch_outputs = self.forward(batch_inputs)
-        total_loss = 0
-        for i in range(self.num_nets):
-            loss = self.get_loss(batch_targets[i], batch_outputs[i][0], batch_outputs[i][1])
-            total_loss += loss
-        total_loss.backward()
+        output_means, output_logvars = self.get_output(self.networks[model_idx](batch_inputs))
+        loss = self.get_loss(batch_targets, output_means, output_logvars)
+        loss.backward()
         self.opt.step()
-        return total_loss / self.num_nets
+        return loss
 
     def train_model(self, inputs, targets, batch_size=128, num_train_itrs=5):
         """
@@ -103,14 +100,15 @@ class PENN(nn.Module):
         # TODO: revisit https://piazza.com/class/llmlh1ivh0156m/post/279
         losses = []
         for epoch in tqdm(range(num_train_itrs), desc="Training"):
-            permutation = torch.randperm(inputs.shape[0])
             avg_loss = 0
-            for start in range(0, inputs.shape[0], batch_size):
-                end = min(start + batch_size, inputs.shape[0])
-                indices = permutation[start:end]
-                batch_inputs, batch_targets = inputs[indices], targets[indices]
-                avg_loss += self.train_step(batch_inputs, batch_targets) * (end - start)
-            avg_loss = avg_loss / inputs.shape[0]
+            for i in range(self.num_nets):
+                # Uniformly sample a batch of size batch_size
+                idxs = torch.randperm(len(inputs))[:batch_size]
+                batch_inputs = inputs[idxs]
+                batch_targets = targets[idxs]
+                loss = self.train_step(i, batch_inputs, batch_targets)
+                avg_loss += loss
+            avg_loss /= self.num_nets
             losses.append(avg_loss.item())
 
         return losses
