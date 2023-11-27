@@ -149,11 +149,11 @@ def expand_root(node:Node, actions:List, network:BaseNetwork, current_state:np.n
 
     # return value of the root
     value = reward
-    
+
     return value
 
 
-def expand_node(node, actions, network, parent_state, parent_action):
+def expand_node(node:Node, actions:List, network:BaseNetwork, parent_state:np.ndarray, parent_action:List):
     """
     TODO: Implement this function
     Expand a node given the parent state and action
@@ -162,7 +162,25 @@ def expand_node(node, actions, network, parent_state, parent_action):
 
     Return: value
     """
-    raise NotImplementedError()
+    # get hidden state representation
+    hidden_state, reward, policy_logits = network.recurrent_inference(
+        parent_state, parent_action)
+    
+    # Extract softmax policy and set node.policy
+    node.hidden_representation = hidden_state
+    node.reward = reward
+    node.prior = np.exp(policy_logits) / np.sum(np.exp(policy_logits))
+
+    # instantiate node's children with prior values
+    for action, prior in enumerate(node.prior):
+        node.children[action] = Node(prior)
+
+    # set node as expanded
+    node.expanded = True
+
+    # get the value of the node
+    value = reward
+
     return value
 
 
