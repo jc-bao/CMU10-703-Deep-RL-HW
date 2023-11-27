@@ -236,4 +236,11 @@ def softmax_sample(visit_counts, temperature):
     """
 
     # YOUR CODE HERE
-    raise NotImplementedError()
+    if temperature == 0:
+        action = max(visit_counts)[1]
+    else:
+        counts = np.array([count for count, _ in visit_counts])
+        actions = np.array([action for _, action in visit_counts])
+        probs = counts**(1/temperature) / np.sum(counts**(1/temperature))
+        action = np.random.choice(actions, p=probs)
+    return action
