@@ -462,7 +462,8 @@ def run_GCBC(args: Args):
             raise NotImplementedError
 
         print('training...')
-        for e in trange(150):
+        iter_num = 150 if args.sample_mode == "expert" else 50
+        for e in trange(iter_num):
             loss, acc = gcbc.train(num_epochs=20)
             succ = evaluate_gc(env, gcbc)
             loss_vec.append(loss)

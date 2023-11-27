@@ -127,16 +127,20 @@ class Imitation:
         )
 
         # train
+        total_loss = 0
+        cnt = 0
         for ep in range(num_epochs):
             for states, actions in dataloader:
                 # forward prop
                 logits = self.model(states)
                 loss = loss_fn(logits, actions)
+                total_loss += loss.item()
+                cnt += 1
                 # backward prop
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-        loss = loss.item()
+        loss = total_loss / cnt
 
         # evaluate on the trained dataset
         num_correct = 0
