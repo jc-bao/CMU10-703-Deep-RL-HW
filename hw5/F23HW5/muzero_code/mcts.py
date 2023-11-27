@@ -1,5 +1,6 @@
 import numpy as np
-
+from networks_base import BaseNetwork
+from typing import List
 
 class Node(object):
 
@@ -117,7 +118,7 @@ def ucb_score(config, parent, child, min_max_stats):
     return prior_score + value_score
 
 
-def expand_root(node, actions, network, current_state):
+def expand_root(node:Node, actions:List, network:BaseNetwork, current_state:np.ndarray):
     """
     TODO: Implement this function
     Expand the root node given the current state
@@ -131,13 +132,24 @@ def expand_root(node, actions, network, current_state):
     Return: the value of the root
     """
     # get hidden state representation
+    hidden_state, reward, policy_logits = network.initial_inference(
+        current_state)
 
     # Extract softmax policy and set node.policy
+    node.hidden_representation = hidden_state
+    node.reward = reward
+    node.prior = np.exp(policy_logits) / np.sum(np.exp(policy_logits))
 
     # instantiate node's children with prior values, obtained from the predicted policy
+    for action, prior in enumerate(node.prior):
+        node.children[action] = Node(prior)
 
     # set node as expanded
-    raise NotImplementedError()
+    node.expanded = True
+
+    # return value of the root
+    value = reward
+    
     return value
 
 
