@@ -81,7 +81,22 @@ def select_child(config, node, min_max_stats):
     normalized Q values from the min max stats
     """
 
-    raise NotImplementedError()
+    # initialize parameters
+    best_score = float('-inf')
+    best_action = None
+    best_child = None
+
+    # iterate over each child
+    for action, child in node.children.items():
+        # compute UCB score
+        score = ucb_score(config, node, child, min_max_stats)
+
+        # update best score , action and child
+        if score > best_score:
+            best_score = score
+            best_action = action
+            best_child = child
+
     return action, child
 
 
