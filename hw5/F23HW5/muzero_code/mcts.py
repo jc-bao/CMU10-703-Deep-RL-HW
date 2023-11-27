@@ -192,10 +192,14 @@ def backpropagate(path, value, discount, min_max_stats):
 
     Update the value with discount and reward of node
     """
+    value_sum = value
     for node in reversed(path):
         # YOUR CODE HERE
+        node.visit_count += 1
+        node.value_sum += value_sum
         min_max_stats.update(node.value())
-    raise NotImplementedError()
+        value_sum = node.reward + discount*value_sum
+    return None
 
 
 def add_exploration_noise(config, node):
