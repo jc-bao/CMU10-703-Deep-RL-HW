@@ -255,6 +255,9 @@ def update_weights(config, network, optimizer, batch, train_results):
             loss_step *= 1.0 / config.unroll_steps
             loss += loss_step
 
+        # print loss shape
+        print("loss shape:", loss.shape)
+
         train_results.total_losses.append(loss)
         train_results.value_losses.append(total_value_loss)
         train_results.policy_losses.append(total_policy_loss)
