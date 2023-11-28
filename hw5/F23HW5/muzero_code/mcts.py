@@ -139,7 +139,7 @@ def expand_root(node:Node, actions:List, network:BaseNetwork, current_state:np.n
     node.hidden_representation = hidden_state
     node.reward = reward
     action_dist = np.exp(policy_logits) / np.sum(np.exp(policy_logits))
-    node.prior = action_dist[0,0]
+    # node.prior = action_dist[0,0]
 
     # instantiate node's children with prior values, obtained from the predicted policy
     for action, prior in enumerate(action_dist[0]):
@@ -172,7 +172,7 @@ def expand_node(node:Node, actions:List, network:BaseNetwork, parent_state:np.nd
     node.hidden_representation = hidden_state
     node.reward = reward
     action_dist = np.exp(policy_logits) / np.sum(np.exp(policy_logits))
-    node.prior = action_dist[0,0]
+    # node.prior = action_dist[0,0]
 
     # instantiate node's children with prior values, obtained from the predicted policy
     for action, prior in enumerate(action_dist[0]):

@@ -204,7 +204,8 @@ def update_weights(config, network, optimizer, batch, train_results):
         # YOUR CODE HERE: Perform initial embedding of state batch
         # convert tuple state_batch to tensor
         state_batch = tf.convert_to_tensor(state_batch)
-        initial_value, _, initial_policy_logits, hidden_representation = network.initial_inference(state_batch)
+        # initial_value, _, initial_policy_logits, hidden_representation = network.initial_inference(state_batch)
+        hidden_representation, initial_value, initial_policy_logits = network.initial_model.__call__(state_batch)
 
         target_value_batch, _, target_policy_batch = zip(
             *targets_init_batch)
@@ -226,9 +227,13 @@ def update_weights(config, network, optimizer, batch, train_results):
                 *targets_batch)
             # YOUR CODE HERE:
             # Create conditioned_representation: concatenate representations with actions batch
-            conditioned_representation = tf.concat((hidden_representation, action_to_one_hot(actions_batch, network.action_size)), axis=1)
+            
+            # action to one hot: actions_batch
+            one_hot_actions_batch = tf.one_hot(actions_batch, network.action_size)
+            conditioned_representation = tf.concat((hidden_representation, one_hot_actions_batch), axis=1)
+            
             # Recurrent step from conditioned representation: recurrent + prediction networks
-            hidden_representation, reward, value, policy_logits = network.recurrent_inference(conditioned_representation)
+            hidden_representation, reward, value, policy_logits = network.recurrent_model.__call__(conditioned_representation)
 
             # Same as above, convert scalar targets to categorical
             target_value_batch = tf.convert_to_tensor(target_value_batch)
@@ -252,7 +257,7 @@ def update_weights(config, network, optimizer, batch, train_results):
             total_policy_loss += policy_loss
             total_reward_loss += reward_loss
             loss_step = 0.25 * value_loss + policy_loss + reward_loss
-            loss_step *= 1.0 / config.unroll_steps
+            loss_step *= 1.0 / config.num_unroll_steps
             loss += loss_step
 
         train_results.total_losses.append(loss)
