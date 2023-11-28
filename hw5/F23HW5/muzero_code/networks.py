@@ -94,7 +94,8 @@ class CartPoleNetwork(BaseNetwork):
         """
         No reward transform for cartpole
         """
-        return np.asscalar(reward.numpy()[0])
+        # return np.asscalar(reward.numpy()[0])
+        return reward.numpy()[0]
 
     def _conditioned_hidden_state(self, hidden_state: np.array, action: int) -> np.array:
         """
@@ -200,6 +201,7 @@ def update_weights(config, network, optimizer, batch, train_results):
          actions_batch) = batch
 
         # YOUR CODE HERE: Perform initial embedding of state batch
+        state_batch = tf.reshape(state_batch, (-1, 4))
         initial_value, _, initial_policy_logits, hidden_representation = network.initial_inference(state_batch)
 
         target_value_batch, _, target_policy_batch = zip(
@@ -254,7 +256,9 @@ def update_weights(config, network, optimizer, batch, train_results):
         train_results.value_losses.append(total_value_loss)
         train_results.policy_losses.append(total_policy_loss)
         train_results.reward_losses.append(total_reward_loss)
+
         return loss
+    
     optimizer.minimize(loss=loss, var_list=network.cb_get_variables())
     network.train_steps += 1
-    raise NotImplementedError()
+    return None

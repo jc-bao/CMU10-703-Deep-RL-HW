@@ -98,7 +98,7 @@ def select_child(config, node, min_max_stats):
             best_action = action
             best_child = child
 
-    return action, child
+    return best_action, best_child
 
 
 def ucb_score(config, parent, child, min_max_stats):
@@ -132,16 +132,17 @@ def expand_root(node:Node, actions:List, network:BaseNetwork, current_state:np.n
     Return: the value of the root
     """
     # get hidden state representation
-    hidden_state, reward, policy_logits = network.initial_inference(
-        current_state)
+    assert current_state.shape == (4,), "current_state.shape != (4,)"
+    value, reward, policy_logits, hidden_state = network.initial_inference(current_state.reshape(1, -1))
 
     # Extract softmax policy and set node.policy
     node.hidden_representation = hidden_state
     node.reward = reward
-    node.prior = np.exp(policy_logits) / np.sum(np.exp(policy_logits))
+    action_dist = np.exp(policy_logits) / np.sum(np.exp(policy_logits))
+    node.prior = action_dist[0,0]
 
     # instantiate node's children with prior values, obtained from the predicted policy
-    for action, prior in enumerate(node.prior):
+    for action, prior in enumerate(action_dist[0]):
         node.children[action] = Node(prior)
 
     # set node as expanded
@@ -162,17 +163,19 @@ def expand_node(node:Node, actions:List, network:BaseNetwork, parent_state:np.nd
 
     Return: value
     """
+    assert parent_state.shape == (1,4), "parent_state.shape != (1,4)"
     # get hidden state representation
-    hidden_state, reward, policy_logits = network.recurrent_inference(
+    value, reward, policy_logits, hidden_state = network.recurrent_inference(
         parent_state, parent_action)
     
-    # Extract softmax policy and set node.policy
+    # Extract softmax policy and set node.prior
     node.hidden_representation = hidden_state
     node.reward = reward
-    node.prior = np.exp(policy_logits) / np.sum(np.exp(policy_logits))
+    action_dist = np.exp(policy_logits) / np.sum(np.exp(policy_logits))
+    node.prior = action_dist[0,0]
 
-    # instantiate node's children with prior values
-    for action, prior in enumerate(node.prior):
+    # instantiate node's children with prior values, obtained from the predicted policy
+    for action, prior in enumerate(action_dist[0]):
         node.children[action] = Node(prior)
 
     # set node as expanded
