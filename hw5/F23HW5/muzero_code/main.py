@@ -8,6 +8,9 @@ from networks import CartPoleNetwork
 from self_play import self_play
 from replay import ReplayBuffer
 from config import get_cartpole_config
+from icecream import install
+
+install()
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
 for gpu in gpus:

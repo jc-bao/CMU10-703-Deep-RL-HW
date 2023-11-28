@@ -94,8 +94,8 @@ class CartPoleNetwork(BaseNetwork):
         """
         No reward transform for cartpole
         """
-        # return np.asscalar(reward.numpy()[0])
-        return reward.numpy()[0]
+        return np.asscalar(reward.numpy()[0])
+        # return reward.numpy()[0]
 
     def _conditioned_hidden_state(self, hidden_state: np.array, action: int) -> np.array:
         """
@@ -170,6 +170,7 @@ def train_network(config, network, replay_buffer, optimizer, train_results):
     """
     for _ in range(config.train_per_epoch):
         batch = replay_buffer.sample_batch()
+        # ic(batch[1])
         update_weights(config, network, optimizer, batch, train_results)
 
 
@@ -201,7 +202,8 @@ def update_weights(config, network, optimizer, batch, train_results):
          actions_batch) = batch
 
         # YOUR CODE HERE: Perform initial embedding of state batch
-        state_batch = tf.reshape(state_batch, (-1, 4))
+        # convert tuple state_batch to tensor
+        state_batch = tf.convert_to_tensor(state_batch)
         initial_value, _, initial_policy_logits, hidden_representation = network.initial_inference(state_batch)
 
         target_value_batch, _, target_policy_batch = zip(
@@ -212,6 +214,7 @@ def update_weights(config, network, optimizer, batch, train_results):
             tf.convert_to_tensor(target_value_batch))
         # YOUR CODE HERE: Compute the loss of the first pass (no reward loss)
         # Remember to scale value loss!
+        # print initial value
         value_loss = tf.nn.softmax_cross_entropy_with_logits(target_value_batch, initial_value)
         policy_loss = tf.nn.softmax_cross_entropy_with_logits(target_policy_batch, initial_policy_logits)
         total_value_loss += value_loss
