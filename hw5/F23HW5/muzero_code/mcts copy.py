@@ -99,6 +99,7 @@ def select_child(config, node, min_max_stats):
             best_child = child
     return best_action, best_child
 
+
 def ucb_score(config, parent, child, min_max_stats):
     """
     Compute UCB Score of a child given the parent statistics
@@ -145,7 +146,11 @@ def expand_root(node:Node, actions:List, network:BaseNetwork, current_state:np.n
     # set node as expanded
     node.expanded = True
 
+    # return value of the root
+    value = reward
+
     return value
+
 
 def expand_node(node:Node, actions:List, network:BaseNetwork, parent_state:np.ndarray, parent_action:List):
     """
@@ -173,7 +178,11 @@ def expand_node(node:Node, actions:List, network:BaseNetwork, parent_state:np.nd
     # set node as expanded
     node.expanded = True
 
+    # get the value of the node
+    value = reward
+
     return value
+
 
 def backpropagate(path, value, discount, min_max_stats):
     """

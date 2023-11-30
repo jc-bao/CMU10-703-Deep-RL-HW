@@ -67,7 +67,6 @@ def play_game(config: MuZeroConfig, network: CartPoleNetwork, env, games_played)
         # Expand root and backpropagate once
         value = expand_root(root, list(range(config.action_space_size)),
                             network, curr_state)
-        # print(value)
         backpropagate([root], value, config.discount, min_max_stats)
         add_exploration_noise(config, root)
         # Run MCTS

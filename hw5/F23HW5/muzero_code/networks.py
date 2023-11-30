@@ -95,7 +95,7 @@ class CartPoleNetwork(BaseNetwork):
         No reward transform for cartpole
         """
         return np.asscalar(reward.numpy()[0])
-        # return reward.numpy()[0]
+        # return reward.numpy()[0].item()
 
     def _conditioned_hidden_state(self, hidden_state: np.array, action: int) -> np.array:
         """
@@ -259,9 +259,6 @@ def update_weights(config, network, optimizer, batch, train_results):
             loss_step = 0.25 * value_loss + policy_loss + reward_loss
             loss_step *= 1.0 / config.num_unroll_steps
             loss += loss_step
-
-        # print loss shape
-        print("loss shape:", loss.shape)
 
         train_results.total_losses.append(loss)
         train_results.value_losses.append(total_value_loss)

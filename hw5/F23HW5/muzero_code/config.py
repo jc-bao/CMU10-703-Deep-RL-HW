@@ -1,7 +1,7 @@
 import collections
 from typing import Optional
 from mcts import visit_softmax_temperature
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import numpy as np
 
 MAX_FLOAT_VAL = float('inf')
